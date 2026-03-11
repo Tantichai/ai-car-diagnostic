@@ -1,40 +1,60 @@
 import streamlit as st
 import pandas as pd
-from transformers import pipeline
+from groq import Groq
 
-st.set_page_config(page_title="Car AI Database", page_icon="🚗")
-st.title("🚗 AI วิเคราะห์อาการจากฐานข้อมูล")
+# --- 1. ตั้งค่า API ---
+GROQ_API_KEY = "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" 
+client = Groq(api_key=GROQ_API_KEY)
 
-# ฟังก์ชันโหลดโมเดล AI
-@st.cache_resource 
-def load_ai():
-    return pipeline("zero-shot-classification", model="moritzlaurer/mDeBERTa-v3-base-mnli-xnli")
+st.set_page_config(page_title="Car AI Diagnostic", page_icon="🚗")
+st.title("🚗 AI วิเคราะห์อาการเสียรถยนต์")
 
-# ฟังก์ชันดึงข้อมูลจาก CSV (เสมือนดึงจาก Database)
+@st.cache_data
 def load_data():
-    return pd.read_csv('car_data.csv')
+    try:
+        return pd.read_csv('car_data.csv')
+    except:
+        return pd.DataFrame(columns=['code', 'symptom', 'fix'])
 
-classifier = load_ai()
 df = load_data()
 
-st.write("ระบุอาการเสียที่พบ:")
-user_input = st.text_input("ตัวอย่าง: เครื่องสั่นมาก")
+# --- 2. ส่วนรับข้อมูลจากผู้ใช้ ---
+st.write("อธิบายอาการเสียของรถเป็นภาษาไทย:")
+user_query = st.text_input("ตัวอย่าง: เครื่องสั่นเวลาจอดนิ่งๆ หรือ มีเสียงดังที่ล้อ", key="car_input")
 
-if st.button("ค้นหาและวิเคราะห์"):
-    if user_input:
-        with st.spinner('กำลังค้นหาข้อมูลในระบบ...'):
-            # 1. ให้ AI วิเคราะห์ว่าอาการที่พิมพ์มา ตรงกับรหัสไหนใน CSV มากที่สุด
-            labels = df['symptom'].tolist()
-            result = classifier(user_input, labels)
+# --- 3. ส่วนการทำงานของปุ่มวิเคราะห์ ---
+if st.button("ให้ AI วิเคราะห์อาการ"):
+    if user_query:
+        with st.spinner('AI กำลังวิเคราะห์ข้อมูล...'):
+            csv_info = df.to_string(index=False)
             
-            # 2. ดึงข้อมูลแถวที่ AI เลือกมาแสดง
-            best_match_symptom = result['labels'][0]
-            matched_row = df[df['symptom'] == best_match_symptom].iloc[0]
+            prompt = f"""
+            คุณคือผู้เชี่ยวชาญด้านเครื่องยนต์ (Expert Mechanic)
+            นี่คือฐานข้อมูลที่เรามี:
+            {csv_info}
             
-            st.divider()
-            st.success(f"🔍 พบข้อมูลที่ใกล้เคียงที่สุด (ความแม่นยำ: {result['scores'][0]:.2%})")
-            st.write(f"**รหัส Error:** {matched_row['code']}")
-            st.write(f"**สาเหตุ:** {matched_row['description']}")
-            st.error(f"🛠️ **วิธีแก้ไข:** {matched_row['fix']}")
+            ผู้ใช้ถามว่า: "{user_query}"
+            
+            หน้าที่ของคุณ:
+            1. ตรวจสอบว่าอาการนี้ตรงกับข้อมูลในฐานข้อมูลหรือไม่
+            2. ถ้าตรง ให้บอก 'รหัส' และ 'วิธีแก้' ตามฐานข้อมูล
+            3. ถ้าไม่ตรง ให้ใช้องค์ความรู้ AI วิเคราะห์และแนะนำวิธีซ่อม
+            4. ตอบเป็นภาษาไทย
+            """
+            
+            try:
+                # วางตรงนี้ครับ! เปลี่ยนจาก llama3-8b-8192 เป็น llama-3.3-70b-versatile
+                completion = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile", 
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.5
+                )
+                
+                st.divider()
+                st.markdown("### 📋 ผลการวิเคราะห์")
+                st.write(completion.choices[0].message.content)
+            except Exception as e:
+                # ถ้า llama-3.3 ยังติดปัญหา ให้ใช้ตัวสำรองคือ "llama-3.1-8b-instant"
+                st.error(f"เกิดข้อผิดพลาด: {e}")
     else:
-        st.warning("กรุณากรอกอาการก่อนครับ")
+        st.warning("กรุณากรอกอาการเสียก่อนครับ")
