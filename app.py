@@ -1,8 +1,8 @@
 import streamlit as st
-import pandas as pd
+import os
 from groq import Groq
 
-# --- 1. ตั้งค่า API ---
+# ใช้บรรทัดนี้แทนการใส่ Key ตรงๆ
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
