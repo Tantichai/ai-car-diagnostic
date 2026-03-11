@@ -3,7 +3,7 @@ import pandas as pd
 from groq import Groq
 
 # --- 1. ตั้งค่า API ---
-GROQ_API_KEY = "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" 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
 st.set_page_config(page_title="Car AI Diagnostic", page_icon="🚗")
